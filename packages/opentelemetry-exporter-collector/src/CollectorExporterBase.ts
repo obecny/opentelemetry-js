@@ -59,7 +59,7 @@ export abstract class CollectorExporterBase<
   }
 
   /**
-   * Export spans.
+   * Export items.
    * @param items
    * @param resultCallback
    */
@@ -85,11 +85,11 @@ export abstract class CollectorExporterBase<
       });
   }
 
-  private _export(spans: ExportItem[]): Promise<unknown> {
+  private _export(items: ExportItem[]): Promise<unknown> {
     return new Promise((resolve, reject) => {
       try {
-        this.logger.debug('items to be sent', spans);
-        this.send(spans, resolve, reject);
+        this.logger.debug('items to be sent', items);
+        this.send(items, resolve, reject);
       } catch (e) {
         reject(e);
       }
