@@ -114,7 +114,7 @@ export abstract class CollectorExporterBase<
   abstract onShutdown(): void;
   abstract onInit(config: T): void;
   abstract send(
-    spans: ExportItem[],
+    items: ExportItem[],
     onSuccess: () => void,
     onError: (error: CollectorExporterError) => void
   ): void;
