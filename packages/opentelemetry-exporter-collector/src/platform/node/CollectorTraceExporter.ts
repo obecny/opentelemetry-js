@@ -107,7 +107,7 @@ export class CollectorTraceExporter extends CollectorTraceExporterBase<
     }
   }
 
-  sendSpans(
+  send(
     spans: ReadableSpan[],
     onSuccess: () => void,
     onError: (error: collectorTypes.CollectorExporterError) => void

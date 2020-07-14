@@ -28,7 +28,7 @@ class CollectorTraceExporter extends CollectorTraceExporterBase<
 > {
   onInit() {}
   onShutdown() {}
-  sendSpans() {}
+  send() {}
   getDefaultUrl(config: CollectorExporterConfig) {
     return config.url || '';
   }
@@ -89,7 +89,10 @@ describe('CollectorTraceExporter - common', () => {
       });
 
       it('should set default serviceName', () => {
-        assert.strictEqual(collectorExporter.serviceName, 'collector-exporter');
+        assert.strictEqual(
+          collectorExporter.serviceName,
+          'collector-span-exporter'
+        );
       });
 
       it('should set default logger', () => {
@@ -101,7 +104,7 @@ describe('CollectorTraceExporter - common', () => {
   describe('export', () => {
     let spySend: any;
     beforeEach(() => {
-      spySend = sinon.stub(CollectorTraceExporter.prototype, 'sendSpans');
+      spySend = sinon.stub(CollectorTraceExporter.prototype, 'send');
       collectorExporter = new CollectorTraceExporter(collectorExporterConfig);
     });
     afterEach(() => {

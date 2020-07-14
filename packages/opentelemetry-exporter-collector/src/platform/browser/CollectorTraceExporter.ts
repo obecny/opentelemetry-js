@@ -58,7 +58,7 @@ export class CollectorTraceExporter extends CollectorTraceExporterBase<
     return config.url || DEFAULT_COLLECTOR_URL;
   }
 
-  sendSpans(
+  send(
     spans: ReadableSpan[],
     onSuccess: () => void,
     onError: (error: collectorTypes.CollectorExporterError) => void

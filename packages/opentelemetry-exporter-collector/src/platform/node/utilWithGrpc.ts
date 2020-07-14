@@ -58,7 +58,7 @@ export function onInitWithGrpc(
       if (collector.grpcSpansQueue.length > 0) {
         const queue = collector.grpcSpansQueue.splice(0);
         queue.forEach((item: GRPCSpanQueueItem) => {
-          collector.sendSpans(item.spans, item.onSuccess, item.onError);
+          collector.send(item.spans, item.onSuccess, item.onError);
         });
       }
     });

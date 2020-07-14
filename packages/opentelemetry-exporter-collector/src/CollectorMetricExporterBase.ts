@@ -15,10 +15,8 @@
  */
 
 import { MetricExporter, MetricRecord } from '@opentelemetry/metrics';
-import { Attributes, Logger } from '@opentelemetry/api';
+import { CollectorExporterBase } from './CollectorExporterBase';
 import { CollectorExporterConfigBase } from './types';
-import { NoopLogger, ExportResult } from '@opentelemetry/core';
-import * as collectorTypes from './types';
 
 const DEFAULT_SERVICE_NAME = 'collector-metric-exporter';
 
@@ -27,93 +25,10 @@ const DEFAULT_SERVICE_NAME = 'collector-metric-exporter';
  */
 export abstract class CollectorMetricExporterBase<
   T extends CollectorExporterConfigBase
-> implements MetricExporter {
-  public readonly serviceName: string;
-  public readonly url: string;
-  public readonly logger: Logger;
-  public readonly hostname: string | undefined;
-  public readonly attributes?: Attributes;
-  protected readonly _startTime = new Date().getTime() * 1000000;
-  private _isShutdown: boolean = false;
-
-  /**
-   * @param config
-   */
+> extends CollectorExporterBase<CollectorExporterConfigBase, MetricRecord>
+  implements MetricExporter {
   constructor(config: T = {} as T) {
-    this.logger = config.logger || new NoopLogger();
-    this.serviceName = config.serviceName || DEFAULT_SERVICE_NAME;
-    this.url = this.getDefaultUrl(config.url);
-    this.attributes = config.attributes;
-    if (typeof config.hostname === 'string') {
-      this.hostname = config.hostname;
-    }
-    this.onInit();
+    config.serviceName = config.serviceName || DEFAULT_SERVICE_NAME;
+    super(config);
   }
-
-  /**
-   * Export metrics
-   * @param metrics
-   * @param resultCallback
-   */
-  export(
-    metrics: MetricRecord[],
-    resultCallback: (result: ExportResult) => void
-  ) {
-    if (this._isShutdown) {
-      resultCallback(ExportResult.FAILED_NOT_RETRYABLE);
-      return;
-    }
-
-    this._exportMetrics(metrics)
-      .then(() => {
-        resultCallback(ExportResult.SUCCESS);
-      })
-      .catch((error: collectorTypes.ExportServiceError) => {
-        if (error.message) {
-          this.logger.error(error.message);
-        }
-        if (error.code && error.code < 500) {
-          resultCallback(ExportResult.FAILED_NOT_RETRYABLE);
-        } else {
-          resultCallback(ExportResult.FAILED_RETRYABLE);
-        }
-      });
-  }
-
-  private _exportMetrics(metrics: MetricRecord[]): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.logger.debug('metrics to be sent', metrics);
-        // Send metrics to [opentelemetry collector]{@link https://github.com/open-telemetry/opentelemetry-collector}
-        // it will use the appropriate transport layer automatically depends on platform
-        this.sendMetrics(metrics, resolve, reject);
-      } catch (e) {
-        reject(e);
-      }
-    });
-  }
-
-  /**
-   * Shutdown the exporter.
-   */
-  shutdown(): void {
-    if (this._isShutdown) {
-      this.logger.debug('shutdown already started');
-      return;
-    }
-    this._isShutdown = true;
-    this.logger.debug('shutdown started');
-
-    // platform dependent
-    this.onShutdown();
-  }
-
-  abstract getDefaultUrl(url: string | undefined): string;
-  abstract onInit(): void;
-  abstract onShutdown(): void;
-  abstract sendMetrics(
-    metrics: MetricRecord[],
-    onSuccess: () => void,
-    onError: (error: collectorTypes.CollectorExporterError) => void
-  ): void;
 }

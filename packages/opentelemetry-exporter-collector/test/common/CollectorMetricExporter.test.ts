@@ -28,9 +28,9 @@ class CollectorMetricExporter extends CollectorMetricExporterBase<
 > {
   onInit() {}
   onShutdown() {}
-  sendMetrics() {}
-  getDefaultUrl(url: string) {
-    return url || '';
+  send() {}
+  getDefaultUrl(config: CollectorExporterConfig) {
+    return config.url || '';
   }
 }
 
@@ -107,7 +107,7 @@ describe('CollectorMetricExporter - common', () => {
   describe('export', () => {
     let spySend: any;
     beforeEach(() => {
-      spySend = sinon.stub(CollectorMetricExporter.prototype, 'sendMetrics');
+      spySend = sinon.stub(CollectorMetricExporter.prototype, 'send');
       collectorExporter = new CollectorMetricExporter(collectorExporterConfig);
     });
     afterEach(() => {
