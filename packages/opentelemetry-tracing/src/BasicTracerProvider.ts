@@ -43,9 +43,12 @@ export class BasicTracerProvider implements api.TracerProvider {
   constructor(config: TracerConfig = DEFAULT_CONFIG) {
     this.logger = config.logger ?? new ConsoleLogger(config.logLevel);
     if (config.resource) {
-      this.resource = config.resource instanceof Promise ? config.resource : Promise.resolve(config.resource);
+      this.resource =
+        config.resource instanceof Promise
+          ? config.resource
+          : Promise.resolve(config.resource);
     } else {
-      this.resource = Promise.resolve(Resource.createTelemetrySDKResource())
+      this.resource = Promise.resolve(Resource.createTelemetrySDKResource());
     }
     this._config = Object.assign({}, config, {
       logger: this.logger,

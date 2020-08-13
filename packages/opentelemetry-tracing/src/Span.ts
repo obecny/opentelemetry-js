@@ -20,7 +20,7 @@ import {
   hrTimeDuration,
   InstrumentationLibrary,
   isTimeInput,
-  timeInputToHrTime
+  timeInputToHrTime,
 } from '@opentelemetry/core';
 import { Resource } from '@opentelemetry/resources';
 import { SpanProcessor } from './SpanProcessor';
@@ -77,7 +77,7 @@ export class Span implements api.Span {
 
     this._resolveResource().then(() => {
       this._spanProcessor.onStart(this);
-    })
+    });
   }
 
   context(): api.SpanContext {
@@ -175,7 +175,7 @@ export class Span implements api.Span {
 
     this._resolveResource().then(() => {
       this._spanProcessor.onEnd(this);
-    })
+    });
   }
 
   isRecording(): boolean {
