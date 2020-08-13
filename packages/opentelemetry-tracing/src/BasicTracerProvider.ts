@@ -38,11 +38,15 @@ export class BasicTracerProvider implements api.TracerProvider {
 
   activeSpanProcessor = new NoopSpanProcessor();
   readonly logger: api.Logger;
-  readonly resource: Resource;
+  readonly resource: Promise<Resource>;
 
   constructor(config: TracerConfig = DEFAULT_CONFIG) {
     this.logger = config.logger ?? new ConsoleLogger(config.logLevel);
-    this.resource = config.resource ?? Resource.createTelemetrySDKResource();
+    if (config.resource) {
+      this.resource = config.resource instanceof Promise ? config.resource : Promise.resolve(config.resource);
+    } else {
+      this.resource = Promise.resolve(Resource.createTelemetrySDKResource())
+    }
     this._config = Object.assign({}, config, {
       logger: this.logger,
       resource: this.resource,

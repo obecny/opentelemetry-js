@@ -39,7 +39,8 @@ export class Tracer implements api.Tracer {
   private readonly _sampler: api.Sampler;
   private readonly _traceParams: TraceParams;
   private readonly _idGenerator: IdGenerator;
-  public resource: Resource;
+  
+  public readonly resource: Promise<Resource>;
   readonly instrumentationLibrary: InstrumentationLibrary;
   readonly logger: api.Logger;
 
@@ -56,11 +57,6 @@ export class Tracer implements api.Tracer {
     this._traceParams = localConfig.traceParams;
     this._idGenerator = config.idGenerator || new RandomIdGenerator();
     this.resource = _tracerProvider.resource;
-    if (this.resource instanceof Promise) {
-      this.resource.then(resource => {
-        this.resource = resource;
-      });
-    }
     this.instrumentationLibrary = instrumentationLibrary;
     this.logger = config.logger || new ConsoleLogger(config.logLevel);
   }
@@ -116,7 +112,7 @@ export class Tracer implements api.Tracer {
       spanKind,
       parentContext ? parentContext.spanId : undefined,
       links,
-      options.startTime
+      options.startTime,
     );
     // Set default attributes
     span.setAttributes(Object.assign(attributes, samplingResult.attributes));

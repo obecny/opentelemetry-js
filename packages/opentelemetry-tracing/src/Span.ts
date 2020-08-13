@@ -20,18 +20,17 @@ import {
   hrTimeDuration,
   InstrumentationLibrary,
   isTimeInput,
-  timeInputToHrTime,
+  timeInputToHrTime
 } from '@opentelemetry/core';
 import { Resource } from '@opentelemetry/resources';
-import { ReadableSpan } from './export/ReadableSpan';
-import { Tracer } from './Tracer';
 import { SpanProcessor } from './SpanProcessor';
+import { Tracer } from './Tracer';
 import { TraceParams } from './types';
 
 /**
  * This class represents a span.
  */
-export class Span implements api.Span, ReadableSpan {
+export class Span implements api.Span {
   // Below properties are included to implement ReadableSpan for export
   // purposes but are not intended to be written-to directly.
   readonly spanContext: api.SpanContext;
@@ -41,7 +40,7 @@ export class Span implements api.Span, ReadableSpan {
   readonly links: api.Link[] = [];
   readonly events: api.TimedEvent[] = [];
   readonly startTime: api.HrTime;
-  resource: Resource;
+  private _resource: Resource | Promise<Resource>;
   readonly instrumentationLibrary: InstrumentationLibrary;
   name: string;
   status: api.Status = {
@@ -70,12 +69,15 @@ export class Span implements api.Span, ReadableSpan {
     this.kind = kind;
     this.links = links;
     this.startTime = timeInputToHrTime(startTime);
-    this.resource = parentTracer.resource;
+    this._resource = parentTracer.resource;
     this.instrumentationLibrary = parentTracer.instrumentationLibrary;
     this._logger = parentTracer.logger;
     this._traceParams = parentTracer.getActiveTraceParams();
     this._spanProcessor = parentTracer.getActiveSpanProcessor();
-    this._spanProcessor.onStart(this);
+
+    this._resolveResource().then(() => {
+      this._spanProcessor.onStart(this);
+    })
   }
 
   context(): api.SpanContext {
@@ -171,15 +173,9 @@ export class Span implements api.Span, ReadableSpan {
       );
     }
 
-    if (this.resource instanceof Promise) {
-      this.resource.then(resource => {
-        this.resource = resource;
-        this._spanProcessor.onEnd(this);
-      });
-      return;
-    }
-
-    this._spanProcessor.onEnd(this);
+    this._resolveResource().then(() => {
+      this._spanProcessor.onEnd(this);
+    })
   }
 
   isRecording(): boolean {
@@ -194,6 +190,13 @@ export class Span implements api.Span, ReadableSpan {
     return this._ended;
   }
 
+  get resource(): Resource {
+    if (this._resource instanceof Promise) {
+      return Resource.createTelemetrySDKResource();
+    }
+    return this._resource;
+  }
+
   private _isSpanEnded(): boolean {
     if (this._ended) {
       this._logger.warn(
@@ -203,5 +206,13 @@ export class Span implements api.Span, ReadableSpan {
       );
     }
     return this._ended;
+  }
+
+  private async _resolveResource() {
+    try {
+      this._resource = await this._resource;
+    } catch (err) {
+      this._logger.error(`Resource failed to resolve: ${err?.message}`);
+    }
   }
 }

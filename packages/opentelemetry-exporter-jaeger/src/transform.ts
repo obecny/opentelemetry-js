@@ -15,7 +15,6 @@
  */
 
 import { Link, CanonicalCode, SpanKind } from '@opentelemetry/api';
-import { Resource } from '@opentelemetry/resources';
 import { ReadableSpan } from '@opentelemetry/tracing';
 import {
   hrTimeToMilliseconds,

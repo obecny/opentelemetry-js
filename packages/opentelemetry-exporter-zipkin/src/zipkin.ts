@@ -27,7 +27,7 @@ import {
   statusDescriptionTagName,
 } from './transform';
 import { OT_REQUEST_HEADER } from './utils';
-import { Resource, SERVICE_RESOURCE } from '@opentelemetry/resources';
+import { SERVICE_RESOURCE } from '@opentelemetry/resources';
 /**
  * Zipkin Exporter
  */
