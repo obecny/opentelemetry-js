@@ -29,7 +29,7 @@ export class UpDownCounterMetric extends Metric<BoundUpDownCounter>
     name: string,
     options: api.MetricOptions,
     private readonly _batcher: Batcher,
-    resource: Resource,
+    resource: Promise<Resource> | Resource,
     instrumentationLibrary: InstrumentationLibrary
   ) {
     super(

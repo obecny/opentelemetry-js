@@ -30,6 +30,7 @@ import { DEFAULT_METRIC_OPTIONS, DEFAULT_CONFIG, MeterConfig } from './types';
 import { Batcher, UngroupedBatcher } from './export/Batcher';
 import { PushController } from './export/Controller';
 import { NoopExporter } from './export/NoopExporter';
+import { MeterProvider } from '.';
 
 /**
  * Meter is an implementation of the {@link Meter} interface.
@@ -38,19 +39,20 @@ export class Meter implements api.Meter {
   private readonly _logger: api.Logger;
   private readonly _metrics = new Map<string, Metric<BaseBoundInstrument>>();
   private readonly _batcher: Batcher;
-  private readonly _resource: Resource;
+  private readonly _resource: Promise<Resource>;
   private readonly _instrumentationLibrary: InstrumentationLibrary;
 
   /**
    * Constructs a new Meter instance.
    */
   constructor(
+    meterProvider: MeterProvider,
     instrumentationLibrary: InstrumentationLibrary,
     config: MeterConfig = DEFAULT_CONFIG
   ) {
     this._logger = config.logger || new ConsoleLogger(config.logLevel);
     this._batcher = config.batcher ?? new UngroupedBatcher();
-    this._resource = config.resource || Resource.createTelemetrySDKResource();
+    this._resource = meterProvider.resource;
     this._instrumentationLibrary = instrumentationLibrary;
     // start the push controller
     const exporter = config.exporter || new NoopExporter();

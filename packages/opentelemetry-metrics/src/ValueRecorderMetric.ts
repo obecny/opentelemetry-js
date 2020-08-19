@@ -31,7 +31,7 @@ export class ValueRecorderMetric extends Metric<BoundValueRecorder>
     name: string,
     options: api.MetricOptions,
     private readonly _batcher: Batcher,
-    resource: Resource,
+    resource: Promise<Resource> | Resource,
     instrumentationLibrary: InstrumentationLibrary
   ) {
     super(

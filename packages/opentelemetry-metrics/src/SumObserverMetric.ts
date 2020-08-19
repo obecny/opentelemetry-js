@@ -30,7 +30,7 @@ export class SumObserverMetric extends BaseObserverMetric
     name: string,
     options: api.MetricOptions,
     batcher: Batcher,
-    resource: Resource,
+    resource: Promise<Resource> | Resource,
     instrumentationLibrary: InstrumentationLibrary,
     callback?: (observerResult: api.ObserverResult) => unknown
   ) {

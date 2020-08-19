@@ -26,12 +26,19 @@ import { DEFAULT_CONFIG, MeterConfig } from './types';
 export class MeterProvider implements api.MeterProvider {
   private readonly _config: MeterConfig;
   private readonly _meters: Map<string, Meter> = new Map();
-  readonly resource: Resource;
+  readonly resource: Promise<Resource>;
   readonly logger: api.Logger;
 
   constructor(config: MeterConfig = DEFAULT_CONFIG) {
     this.logger = config.logger ?? new ConsoleLogger(config.logLevel);
-    this.resource = config.resource ?? Resource.createTelemetrySDKResource();
+    if (config.resource) {
+      this.resource =
+        config.resource instanceof Promise
+          ? config.resource
+          : Promise.resolve(config.resource);
+    } else {
+      this.resource = Promise.resolve(Resource.createTelemetrySDKResource());
+    }
     this._config = Object.assign({}, config, {
       logger: this.logger,
       resource: this.resource,
@@ -48,7 +55,7 @@ export class MeterProvider implements api.MeterProvider {
     if (!this._meters.has(key)) {
       this._meters.set(
         key,
-        new Meter({ name, version }, config || this._config)
+        new Meter(this, { name, version }, config || this._config)
       );
     }
 
