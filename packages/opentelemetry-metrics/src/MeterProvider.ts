@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { ConsoleLogger } from '@opentelemetry/core';
+import { ConsoleLogger, notifyOnGlobalShutdown } from '@opentelemetry/core';
 import * as api from '@opentelemetry/api';
 import { Resource } from '@opentelemetry/resources';
 import { Meter } from '.';
@@ -27,6 +27,7 @@ export class MeterProvider implements api.MeterProvider {
   private readonly _config: MeterConfig;
   private readonly _meters: Map<string, Meter> = new Map();
   readonly resource: Promise<Resource>;
+  private _cleanNotifyOnGlobalShutdown: Function | undefined;
   readonly logger: api.Logger;
 
   constructor(config: MeterConfig = DEFAULT_CONFIG) {
@@ -43,6 +44,11 @@ export class MeterProvider implements api.MeterProvider {
       logger: this.logger,
       resource: this.resource,
     });
+    if (this._config.gracefulShutdown) {
+      this._cleanNotifyOnGlobalShutdown = notifyOnGlobalShutdown(
+        this._shutdownAllMeters.bind(this)
+      );
+    }
   }
 
   /**
@@ -60,5 +66,24 @@ export class MeterProvider implements api.MeterProvider {
     }
 
     return this._meters.get(key)!;
+  }
+
+  shutdown(cb: () => void = () => {}): void {
+    this._shutdownAllMeters().then(() => {
+      setTimeout(cb, 0);
+    });
+    if (this._cleanNotifyOnGlobalShutdown) {
+      this._cleanNotifyOnGlobalShutdown();
+      this._cleanNotifyOnGlobalShutdown = undefined;
+    }
+  }
+
+  private _shutdownAllMeters() {
+    if (this._config.exporter) {
+      this._config.exporter.shutdown();
+    }
+    return Promise.all(
+      Array.from(this._meters, ([_, meter]) => meter.shutdown())
+    );
   }
 }

@@ -15,6 +15,7 @@
  */
 
 import { Resource } from '@opentelemetry/resources';
+import { ExceptionAttribute } from '@opentelemetry/semantic-conventions';
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import {
@@ -23,6 +24,7 @@ import {
   TraceFlags,
   SpanContext,
   LinkContext,
+  Exception,
 } from '@opentelemetry/api';
 import {
   BasicTracerProvider,
@@ -76,7 +78,7 @@ describe('Span', () => {
     const span = new Span(tracer, name, spanContext, SpanKind.SERVER);
     assert.ok(
       hrTimeToMilliseconds(span.startTime) >
-        hrTimeToMilliseconds(performanceTimeOrigin)
+      hrTimeToMilliseconds(performanceTimeOrigin)
     );
   });
 
@@ -90,7 +92,7 @@ describe('Span', () => {
 
     assert.ok(
       hrTimeToMilliseconds(span.endTime) >
-        hrTimeToMilliseconds(performanceTimeOrigin),
+      hrTimeToMilliseconds(performanceTimeOrigin),
       'end time must be bigger than time origin'
     );
   });
@@ -106,7 +108,7 @@ describe('Span', () => {
     span.addEvent('my-event');
     assert.ok(
       hrTimeToMilliseconds(span.events[0].time) >
-        hrTimeToMilliseconds(performanceTimeOrigin)
+      hrTimeToMilliseconds(performanceTimeOrigin)
     );
   });
 
@@ -403,10 +405,97 @@ describe('Span', () => {
       setTimeout(() => {
         const exportedSpan = (spy.args[0][0][0] as unknown) as ReadableSpan;
         assert.deepStrictEqual(exportedSpan.spanContext, span.context());
-        assert.deepStrictEqual(exportedSpan.resource.labels, {
+        assert.deepStrictEqual(exportedSpan.resource.attributes, {
           foo: 'bar',
         });
       }, 10);
+    });
+  });
+
+  describe('recordException', () => {
+    const invalidExceptions: any[] = [
+      1,
+      null,
+      undefined,
+      { foo: 'bar' },
+      { stack: 'bar' },
+      ['a', 'b', 'c'],
+    ];
+
+    invalidExceptions.forEach(key => {
+      describe(`when exception is (${JSON.stringify(key)})`, () => {
+        it('should NOT record an exception', () => {
+          const span = new Span(tracer, name, spanContext, SpanKind.CLIENT);
+          assert.strictEqual(span.events.length, 0);
+          span.recordException(key);
+          assert.strictEqual(span.events.length, 0);
+        });
+      });
+    });
+
+    describe('when exception type is "string"', () => {
+      let error: Exception;
+      beforeEach(() => {
+        error = 'boom';
+      });
+      it('should record an exception', () => {
+        const span = new Span(tracer, name, spanContext, SpanKind.CLIENT);
+        assert.strictEqual(span.events.length, 0);
+        span.recordException(error);
+
+        const event = span.events[0];
+        assert.strictEqual(event.name, 'exception');
+        assert.deepStrictEqual(event.attributes, {
+          'exception.message': 'boom',
+        });
+        assert.ok(event.time[0] > 0);
+      });
+    });
+
+    const errorsObj = [
+      {
+        description: 'code',
+        obj: { code: 'Error', message: 'boom', stack: 'bar' },
+      },
+      {
+        description: 'name',
+        obj: { name: 'Error', message: 'boom', stack: 'bar' },
+      },
+    ];
+    errorsObj.forEach(errorObj => {
+      describe(`when exception type is an object with ${errorObj.description}`, () => {
+        const error: Exception = errorObj.obj;
+        it('should record an exception', () => {
+          const span = new Span(tracer, name, spanContext, SpanKind.CLIENT);
+          assert.strictEqual(span.events.length, 0);
+          span.recordException(error);
+
+          const event = span.events[0];
+          assert.ok(event.time[0] > 0);
+          assert.strictEqual(event.name, 'exception');
+
+          assert.ok(event.attributes);
+
+          const type = event.attributes[ExceptionAttribute.TYPE];
+          const message = event.attributes[ExceptionAttribute.MESSAGE];
+          const stacktrace = String(
+            event.attributes[ExceptionAttribute.STACKTRACE]
+          );
+          assert.strictEqual(type, 'Error');
+          assert.strictEqual(message, 'boom');
+          assert.strictEqual(stacktrace, 'bar');
+        });
+      });
+    });
+
+    describe('when time is provided', () => {
+      it('should record an exception with provided time', () => {
+        const span = new Span(tracer, name, spanContext, SpanKind.CLIENT);
+        assert.strictEqual(span.events.length, 0);
+        span.recordException('boom', [0, 123]);
+        const event = span.events[0];
+        assert.deepStrictEqual(event.time, [0, 123]);
+      });
     });
   });
 });

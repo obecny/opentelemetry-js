@@ -14,13 +14,20 @@
  * limitations under the License.
  */
 
-import { HttpTextPropagator, metrics } from '@opentelemetry/api';
+import { TextMapPropagator, metrics } from '@opentelemetry/api';
 import { ContextManager } from '@opentelemetry/context-base';
 import { MeterConfig, MeterProvider } from '@opentelemetry/metrics';
 import { NodeTracerConfig, NodeTracerProvider } from '@opentelemetry/node';
-import { detectResources, Resource } from '@opentelemetry/resources';
+import {
+  detectResources,
+  Resource,
+  ResourceDetectionConfig,
+  envDetector,
+} from '@opentelemetry/resources';
 import { BatchSpanProcessor, SpanProcessor } from '@opentelemetry/tracing';
 import { NodeSDKConfiguration } from './types';
+import { awsEc2Detector } from '@opentelemetry/resource-detector-aws';
+import { gcpDetector } from '@opentelemetry/resource-detector-gcp';
 
 const MAX_RESOURCE_WAIT_TIME_MS = 2000;
 /** This class represents everything needed to register a fully configured OpenTelemetry Node.js SDK */
@@ -29,7 +36,7 @@ export class NodeSDK {
     tracerConfig: NodeTracerConfig;
     spanProcessor: SpanProcessor;
     contextManager?: ContextManager;
-    httpTextPropagator?: HttpTextPropagator;
+    textMapPropagator?: TextMapPropagator;
   };
   private _meterProviderConfig?: MeterConfig;
 
@@ -72,7 +79,7 @@ export class NodeSDK {
         tracerProviderConfig,
         spanProcessor,
         configuration.contextManager,
-        configuration.httpTextPropagator
+        configuration.textMapPropagator
       );
     }
 
@@ -104,13 +111,13 @@ export class NodeSDK {
     tracerConfig: NodeTracerConfig,
     spanProcessor: SpanProcessor,
     contextManager?: ContextManager,
-    httpTextPropagator?: HttpTextPropagator
+    textMapPropagator?: TextMapPropagator
   ) {
     this._tracerProviderConfig = {
       tracerConfig,
       spanProcessor,
       contextManager,
-      httpTextPropagator,
+      textMapPropagator,
     };
   }
 
@@ -120,10 +127,16 @@ export class NodeSDK {
   }
 
   /** Detect resource attributes */
-  private _detectResources(): Promise<Resource> {
+  private _detectResources(config?: ResourceDetectionConfig): Promise<Resource> {
     if (!this._autoDetectResources) {
       return Promise.resolve(this._resource);
     }
+
+    const internalConfig: ResourceDetectionConfig = {
+      detectors: [awsEc2Detector, gcpDetector, envDetector],
+      ...config,
+    };
+
     return new Promise<Resource>(resolve => {
       let resolved = false;
       setTimeout(() => {
@@ -132,7 +145,7 @@ export class NodeSDK {
           resolve(this._resource);
         }
       }, MAX_RESOURCE_WAIT_TIME_MS);
-      detectResources().then(
+      detectResources(internalConfig).then(
         resource => {
           if (!resolved) {
             resolved = true;
@@ -173,7 +186,7 @@ export class NodeSDK {
       tracerProvider.addSpanProcessor(this._tracerProviderConfig.spanProcessor);
       tracerProvider.register({
         contextManager: this._tracerProviderConfig.contextManager,
-        propagator: this._tracerProviderConfig.httpTextPropagator,
+        propagator: this._tracerProviderConfig.textMapPropagator,
       });
     }
 

@@ -41,6 +41,7 @@ export class Meter implements api.Meter {
   private readonly _batcher: Batcher;
   private readonly _resource: Promise<Resource>;
   private readonly _instrumentationLibrary: InstrumentationLibrary;
+  private readonly _controller: PushController;
 
   /**
    * Constructs a new Meter instance.
@@ -57,7 +58,7 @@ export class Meter implements api.Meter {
     // start the push controller
     const exporter = config.exporter || new NoopExporter();
     const interval = config.interval;
-    new PushController(this, exporter, interval);
+    this._controller = new PushController(this, exporter, interval);
   }
 
   /**
@@ -309,6 +310,10 @@ export class Meter implements api.Meter {
 
   getBatcher(): Batcher {
     return this._batcher;
+  }
+
+  async shutdown(): Promise<void> {
+    await this._controller.shutdown();
   }
 
   /**
