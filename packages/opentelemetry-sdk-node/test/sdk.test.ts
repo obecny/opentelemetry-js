@@ -15,6 +15,7 @@
  */
 
 import * as nock from 'nock';
+import * as semver from 'semver';
 import {
   context,
   metrics,
@@ -23,6 +24,7 @@ import {
   NoopTracerProvider,
   propagation,
   trace,
+  ProxyTracerProvider,
 } from '@opentelemetry/api';
 import { AsyncHooksContextManager } from '@opentelemetry/context-async-hooks';
 import { NoopContextManager } from '@opentelemetry/context-base';
@@ -84,6 +86,7 @@ const mockedHostResponse = 'my-hostname';
     before(() => {
       // Disable attempted load of default plugins
       Sinon.replace(NodeConfig, 'DEFAULT_INSTRUMENTATION_PLUGINS', {});
+      nock.disableNetConnect();
     });
     after(() => {
       Sinon.restore();
@@ -103,11 +106,6 @@ const mockedHostResponse = 'my-hostname';
         });
 
         sdk.start();
-        assert.ok(context['_getContextManager']() instanceof NoopContextManager);
-        assert.ok(
-          propagation['_getGlobalPropagator']() instanceof NoopTextMapPropagator
-        );
-
         assert.ok(
           context['_getContextManager']() instanceof NoopContextManager
         );
@@ -116,7 +114,10 @@ const mockedHostResponse = 'my-hostname';
           NoopTextMapPropagator
         );
 
-        assert.ok(trace.getTracerProvider() instanceof NoopTracerProvider);
+        const apiTracerProvider = trace.getTracerProvider();
+        assert.ok(apiTracerProvider instanceof ProxyTracerProvider);
+        assert.ok(apiTracerProvider.getDelegate() instanceof NoopTracerProvider);
+
         assert.ok(metrics.getMeterProvider() instanceof NoopMeterProvider);
       });
 
@@ -129,6 +130,15 @@ const mockedHostResponse = 'my-hostname';
         sdk.start();
 
         assert.ok(metrics.getMeterProvider() instanceof NoopMeterProvider);
+        assert.ok(
+          context['_getContextManager']() instanceof AsyncHooksContextManager
+        );
+        assert.ok(
+          propagation['_getGlobalPropagator']() instanceof CompositePropagator
+        );
+        const apiTracerProvider = trace.getTracerProvider();
+        assert.ok(apiTracerProvider instanceof ProxyTracerProvider);
+        assert.ok(apiTracerProvider.getDelegate() instanceof NodeTracerProvider);
 
         assert.ok(
           context['_getContextManager']() instanceof AsyncHooksContextManager
@@ -136,7 +146,6 @@ const mockedHostResponse = 'my-hostname';
         assert.ok(
           propagation['_getGlobalPropagator']() instanceof CompositePropagator
         );
-        assert.ok(trace.getTracerProvider() instanceof NodeTracerProvider);
       });
 
       it('should register a tracer provider if a span processor is provided', async () => {
@@ -149,16 +158,17 @@ const mockedHostResponse = 'my-hostname';
         });
 
         sdk.start();
-
-        assert.ok(metrics.getMeterProvider() instanceof NoopMeterProvider);
-
         assert.ok(
           context['_getContextManager']() instanceof AsyncHooksContextManager
         );
         assert.ok(
           propagation['_getGlobalPropagator']() instanceof CompositePropagator
         );
-        assert.ok(trace.getTracerProvider() instanceof NodeTracerProvider);
+        const apiTracerProvider = trace.getTracerProvider();
+        assert.ok(apiTracerProvider instanceof ProxyTracerProvider);
+        assert.ok(apiTracerProvider.getDelegate() instanceof NodeTracerProvider);
+
+        assert.ok(metrics.getMeterProvider() instanceof NoopMeterProvider);
       });
 
       it('should register a meter provider if an exporter is provided', async () => {
@@ -183,7 +193,9 @@ const mockedHostResponse = 'my-hostname';
           NoopTextMapPropagator
         );
 
-        assert.ok(trace.getTracerProvider() instanceof NoopTracerProvider);
+        const apiTracerProvider = trace.getTracerProvider();
+        assert.ok(apiTracerProvider instanceof ProxyTracerProvider);
+        assert.ok(apiTracerProvider.getDelegate() instanceof NoopTracerProvider);
 
         assert.ok(metrics.getMeterProvider() instanceof MeterProvider);
       });
@@ -203,68 +215,57 @@ const mockedHostResponse = 'my-hostname';
       delete process.env.OTEL_RESOURCE_ATTRIBUTES;
     });
 
-    describe('in GCP environment', () => {
-      after(() => {
-        resetIsAvailableCache();
-      });
+    // GCP detector only works in 10+
+    (semver.satisfies(process.version, '>=10') ? describe : describe.skip)(
+      'in GCP environment',
+      async () => {
+        beforeEach(resetIsAvailableCache);
+        after(resetIsAvailableCache);
+        it('returns a merged resource', async () => {
+          const sdk = new NodeSDK({
+            autoDetectResources: true,
+          });
+          const gcpScope = nock(HOST_ADDRESS)
+            .get(INSTANCE_PATH)
+            .reply(200, {}, HEADERS)
+            .get(INSTANCE_ID_PATH)
+            .reply(200, () => 452003179927758, HEADERS)
+            .get(PROJECT_ID_PATH)
+            .reply(200, () => 'my-project-id', HEADERS)
+            .get(ZONE_PATH)
+            .reply(200, () => 'project/zone/my-zone', HEADERS)
+            .get(CLUSTER_NAME_PATH)
+            .reply(404);
+          const gcpSecondaryScope = nock(SECONDARY_HOST_ADDRESS)
+            .get(INSTANCE_PATH)
+            .reply(200, {}, HEADERS);
 
-      it('returns a merged resource', async () => {
-        const sdk = new NodeSDK({
-          autoDetectResources: true,
-        });
-        const gcpScope = nock(HOST_ADDRESS)
-          .get(INSTANCE_PATH)
-          .reply(200, {}, HEADERS)
-          .get(INSTANCE_ID_PATH)
-          .reply(200, () => 452003179927758, HEADERS)
-          .get(PROJECT_ID_PATH)
-          .reply(200, () => 'my-project-id', HEADERS)
-          .get(ZONE_PATH)
-          .reply(200, () => 'project/zone/my-zone', HEADERS)
-          .get(CLUSTER_NAME_PATH)
-          .reply(404);
-        const gcpSecondaryScope = nock(SECONDARY_HOST_ADDRESS)
-          .get(INSTANCE_PATH)
-          .reply(200, {}, HEADERS);
-        const awsScope = nock(AWS_HOST)
-          .persist()
-          .put(AWS_TOKEN_PATH)
-          .matchHeader(AWS_METADATA_TTL_HEADER, '60')
-          .replyWithError({ code: 'ENOTFOUND' });
-        const resource = await sdk["_detectResources"]();
+          const resource = await sdk["_detectResources"]();
 
-        awsScope.done();
-        gcpSecondaryScope.done();
-        gcpScope.done();
+          gcpSecondaryScope.done();
+          gcpScope.done();
 
-        assertCloudResource(resource, {
-          provider: 'gcp',
-          accountId: 'my-project-id',
-          zone: 'my-zone',
+          assertCloudResource(resource, {
+            provider: 'gcp',
+            accountId: 'my-project-id',
+            zone: 'my-zone',
+          });
+          assertHostResource(resource, { id: '452003179927758' });
+          assertServiceResource(resource, {
+            instanceId: '627cc493',
+            name: 'my-service',
+            namespace: 'default',
+            version: '0.0.1',
+          });
         });
-        assertHostResource(resource, { id: '452003179927758' });
-        assertServiceResource(resource, {
-          instanceId: '627cc493',
-          name: 'my-service',
-          namespace: 'default',
-          version: '0.0.1',
-        });
-      });
-    });
+      }
+    );
 
     describe('in AWS environment', () => {
       it('returns a merged resource', async () => {
         const sdk = new NodeSDK({
           autoDetectResources: true,
         });
-        const gcpScope = nock(HOST_ADDRESS).get(INSTANCE_PATH).replyWithError({
-          code: 'ENOTFOUND',
-        });
-        const gcpSecondaryScope = nock(SECONDARY_HOST_ADDRESS)
-          .get(INSTANCE_PATH)
-          .replyWithError({
-            code: 'ENOTFOUND',
-          });
         const awsScope = nock(AWS_HOST)
           .persist()
           .put(AWS_TOKEN_PATH)
@@ -277,8 +278,6 @@ const mockedHostResponse = 'my-hostname';
           .matchHeader(AWS_METADATA_TOKEN_HEADER, mockedTokenResponse)
           .reply(200, () => mockedHostResponse);
         const resource = await sdk["_detectResources"]();
-        gcpSecondaryScope.done();
-        gcpScope.done();
         awsScope.done();
 
         assertCloudResource(resource, {

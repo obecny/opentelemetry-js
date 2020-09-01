@@ -13,26 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { Point, Sum } from '@opentelemetry/metrics';
+import { HrTime } from '@opentelemetry/api';
 
-/** An Instrument for Counter Metric. */
-export interface BoundCounter {
-  /**
-   * Adds the given value to the current value. Values cannot be negative.
-   * @param value the value to add.
-   */
-  add(value: number): void;
-}
-
-/** ValueRecorder to report instantaneous measurement of a value. */
-export interface BoundValueRecorder {
-  /**
-   * Records the given value to this value recorder.
-   * @param value to record.
-   */
-  record(value: number): void;
-}
-
-/** An Instrument for Base Observer */
-export interface BoundBaseObserver {
-  update(value: number): void;
+export const mockedHrTime: HrTime = [1586347902, 211_000_000];
+export const mockedHrTimeMs = 1586347902211;
+export function mockAggregator(Aggregator: any) {
+  let toPoint: () => Point<Sum>;
+  before(() => {
+    toPoint = Aggregator.prototype.toPoint;
+    Aggregator.prototype.toPoint = function (): Point<Sum> {
+      const point = toPoint.apply(this);
+      point.timestamp = mockedHrTime;
+      return point;
+    };
+  });
+  after(() => {
+    Aggregator.prototype.toPoint = toPoint;
+  });
 }
